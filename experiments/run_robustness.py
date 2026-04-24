@@ -42,6 +42,7 @@ from asian_option_pricer import (
     sobol_qmc_price,
     standard_mc_price,
 )
+from asian_option_pricer.utils import monitoring_times
 
 
 METHODS = {
@@ -60,10 +61,17 @@ METHODS = {
 N_SCENARIOS = 200
 N_PATHS_SCENARIO = 32_768
 SEED_BASE = 20240420
+LEVY_DIFF_TOL = 1.0e-4
 
 
 def _no_arb_bounds(params: AsianOptionParams) -> tuple[float, float]:
-    return 0.0, params.S0
+    if params.option_type != "call":
+        return 0.0, params.S0
+
+    times = monitoring_times(params)
+    lower = geometric_asian_call_price(params)
+    upper = float(np.mean(params.S0 * np.exp(-params.r * (params.T - times))))
+    return lower, upper
 
 
 def _run_all(params: AsianOptionParams, n_paths: int, seed: int) -> dict:
@@ -95,11 +103,14 @@ def random_scenarios() -> pd.DataFrame:
 
         for name, out in runs.items():
             price = out.get("price", float("nan"))
+            std_err = out.get("std_err", float("nan"))
             is_nan = not np.isfinite(price)
-            out_of_bounds = (not is_nan) and (price < lo - 1e-8 or price > hi + 1e-8)
-            levy_diff_bps = (
-                1.0e4 * (price - levy) / max(levy, 1e-8) if not is_nan else float("nan")
-            )
+            below_lower_bound = (not is_nan) and (price < lo - 1e-8)
+            above_upper_bound = (not is_nan) and (price > hi + 1e-8)
+            out_of_bounds = below_lower_bound or above_upper_bound
+            levy_abs_diff = abs(price - levy) if not is_nan else float("nan")
+            levy_scale = max(float(std_err), LEVY_DIFF_TOL) if np.isfinite(std_err) else LEVY_DIFF_TOL
+            levy_diff_scaled = levy_abs_diff / levy_scale if not is_nan else float("nan")
             rows.append(
                 {
                     "scenario": i,
@@ -110,12 +121,18 @@ def random_scenarios() -> pd.DataFrame:
                     "N": N,
                     "method": name,
                     "price": price,
-                    "std_err": out.get("std_err", float("nan")),
+                    "std_err": std_err,
                     "runtime_s": out.get("runtime_s", float("nan")),
                     "is_nan": is_nan,
+                    "geometric_ref": lo,
+                    "upper_bound_ref": hi,
+                    "below_lower_bound": below_lower_bound,
+                    "above_upper_bound": above_upper_bound,
                     "out_of_bounds": out_of_bounds,
                     "levy_ref": levy,
-                    "diff_from_levy_bps": levy_diff_bps,
+                    "diff_from_levy_abs": levy_abs_diff,
+                    "levy_diff_scale": levy_scale,
+                    "diff_from_levy_scaled": levy_diff_scaled,
                 }
             )
     return pd.DataFrame(rows)
@@ -186,9 +203,11 @@ def _summarise_random(df: pd.DataFrame) -> pd.DataFrame:
     grouped = df.groupby("method").agg(
         scenarios=("scenario", "nunique"),
         n_nan=("is_nan", "sum"),
+        n_below_lower_bound=("below_lower_bound", "sum"),
+        n_above_upper_bound=("above_upper_bound", "sum"),
         n_out_of_bounds=("out_of_bounds", "sum"),
-        median_abs_diff_bps=("diff_from_levy_bps", lambda s: float(np.nanmedian(np.abs(s)))),
-        p95_abs_diff_bps=("diff_from_levy_bps", lambda s: float(np.nanpercentile(np.abs(s), 95))),
+        median_levy_gap_scaled=("diff_from_levy_scaled", lambda s: float(np.nanmedian(s))),
+        p95_levy_gap_scaled=("diff_from_levy_scaled", lambda s: float(np.nanpercentile(s, 95))),
         mean_runtime_s=("runtime_s", "mean"),
         mean_std_err=("std_err", "mean"),
     )
@@ -206,10 +225,10 @@ def _monotonicity_violations(df: pd.DataFrame) -> pd.DataFrame:
             diffs = np.diff(values)
             if expected == "decreasing":
                 violations = int(np.sum(diffs > 0))
-                max_violation = float(diffs.max())
+                max_violation = float(max(0.0, float(diffs.max()))) if diffs.size else 0.0
             else:
                 violations = int(np.sum(diffs < 0))
-                max_violation = float(-diffs.min())
+                max_violation = float(max(0.0, float(-diffs.min()))) if diffs.size else 0.0
             out.append(
                 {
                     "sweep": sweep,
