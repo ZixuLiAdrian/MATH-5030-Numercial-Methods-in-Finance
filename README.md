@@ -4,7 +4,7 @@
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ZixuLiAdrian/MATH5030-Numerical-Methods-in-Finance/blob/main/notebooks/demo.ipynb)
 
-*MATH 5030 — Numerical Methods in Finance — Columbia University, Spring 2025*
+*MATH 5030 — Numerical Methods in Finance — Columbia University, Spring 2026*
 
 ---
 
@@ -88,7 +88,7 @@ All estimators return a `dict` with at minimum `{price, std_err, runtime_s, n_pa
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Authors: Zixu Li, Zhanpeng Jiang, Kaifan Yang, Terry Zhang, Jack Jia.
+MIT — see [LICENSE](LICENSE). Authors: Chan-Peng Chen, Jack Jia, Zixu Li, Benjamin Tu, Tianrui Wang, Kaifan Ye.
 
 ---
 
