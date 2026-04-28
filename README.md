@@ -4,7 +4,7 @@
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ZixuLiAdrian/MATH5030-Numerical-Methods-in-Finance/blob/main/notebooks/demo.ipynb)
 
-*MATH 5030 — Numerical Methods in Finance — Columbia University, Spring 2026*
+*MATH 5030 — Numerical Methods in Finance — Columbia University, Spring 2025*
 
 ---
 
